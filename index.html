@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>USGS Earthquakes WDC</title>
+  <script src="https://unpkg.com/tableauwdc@2.3.0/dist/tableauwdc.min.js"></script>
+</head>
+<body>
+  <h2>USGS Earthquakes Feed</h2>
+  <p>Select time range for earthquakes:</p>
+  <select id="duration">
+    <option value="hour">Last Hour</option>
+    <option value="day" selected>Last 24 Hours</option>
+    <option value="week">Last 7 Days</option>
+    <option value="month">Last 30 Days</option>
+  </select>
+  <br><br>
+  <button id="connectButton">Connect to Tableau</button>
+
+  <script>
+    function loadWDC() {
+      if (typeof tableau === "undefined") {
+        console.error("Tableau WDC not loaded");
+        return;
+      }
+
+      const myConnector = tableau.makeConnector();
+
+      myConnector.getSchema = function (schemaCallback) {
+        const cols = [
+          { id: "id", dataType: tableau.dataTypeEnum.string },
+          { id: "place", dataType: tableau.dataTypeEnum.string },
+          { id: "time", dataType: tableau.dataTypeEnum.datetime },
+          { id: "magnitude", dataType: tableau.dataTypeEnum.float },
+          { id: "depth", dataType: tableau.dataTypeEnum.float },
+          { id: "latitude", dataType: tableau.dataTypeEnum.float },
+          { id: "longitude", dataType: tableau.dataTypeEnum.float }
+        ];
+
+        schemaCallback([{
+          id: "usgs_earthquakes",
+          alias: "USGS Earthquake Data",
+          columns: cols
+        }]);
+      };
+
+      myConnector.getData = function (table, doneCallback) {
+        const duration = tableau.connectionData || "day";
+        const url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_${duration}.geojson`;
+
+        fetch(url)
+          .then(resp => resp.json())
+          .then(data => {
+            const rows = data.features.map(f => {
+              const p = f.properties;
+              const c = f.geometry.coordinates;
+              return {
+                id: f.id,
+                place: p.place,
+                time: new Date(p.time),
+                magnitude: p.mag,
+                depth: c[2],
+                longitude: c[0],
+                latitude: c[1]
+              };
+            });
+            table.appendRows(rows);
+            doneCallback();
+          }).catch(err => {
+            console.error("Fetch error:", err);
+            doneCallback();
+          });
+      };
+
+      myConnector.init = function (initCallback) {
+        initCallback();
+      };
+
+      tableau.registerConnector(myConnector);
+    }
+
+    document.getElementById("connectButton").addEventListener("click", function () {
+      tableau.connectionName = "USGS Earthquakes";
+      tableau.connectionData = document.getElementById("duration").value;
+      tableau.submit();
+    });
+
+    window.addEventListener("load", loadWDC);
+  </script>
+</body>
+</html>
+Add WDC index file
